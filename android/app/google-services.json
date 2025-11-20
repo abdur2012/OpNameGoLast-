@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "882274344569",
+    "project_id": "stokopname-9b20e",
+    "storage_bucket": "stokopname-9b20e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:882274344569:android:df0bb683eb9f6cb7057ea8",
+        "android_client_info": {
+          "package_name": "com.example.stokop_barang"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDQMmo3NDZSPeM3j6be5hF1zKbaZB7kvco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
