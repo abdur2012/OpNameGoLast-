@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/audit_service.dart';
 import '../widgets/custom_navbar.dart';
+import 'data_barang_page.dart';
 
 class TambahBarangKeluarPage extends StatefulWidget {
   const TambahBarangKeluarPage({super.key});
@@ -117,7 +118,8 @@ class _TambahBarangKeluarPageState extends State<TambahBarangKeluarPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Barang keluar berhasil disimpan')),
         );
-        Navigator.pop(context);
+        // Navigate to Data Barang page, replacing current route
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DataBarangPage()));
       }
     } catch (e) {
       if (mounted) Navigator.of(context).pop();
@@ -127,6 +129,56 @@ class _TambahBarangKeluarPageState extends State<TambahBarangKeluarPage> {
         ).showSnackBar(SnackBar(content: Text('Gagal: $e')));
       }
     }
+  }
+
+  // Tambahkan fungsi untuk mengambil riwayat barang keluar dari Firestore
+  Future<List<Map<String, dynamic>>> _fetchHistory() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('history')
+          .where('itemId', isEqualTo: _selectedDocId)
+          .orderBy('timestamp', descending: true)
+          .get();
+
+      return snapshot.docs.map((doc) => doc.data()).toList();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat riwayat: $e')),
+        );
+      }
+      return [];
+    }
+  }
+
+  // Tambahkan widget untuk menampilkan riwayat
+  Widget _buildHistorySection() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _fetchHistory(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('Tidak ada riwayat.'));
+        }
+
+        final history = snapshot.data!;
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: history.length,
+          itemBuilder: (context, index) {
+            final entry = history[index];
+            return ListTile(
+              title: Text(entry['action'] ?? 'Perubahan'),
+              subtitle: Text(entry['details']?.toString() ?? ''),
+              trailing: Text(entry['timestamp']?.toDate()?.toString() ?? ''),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -161,7 +213,7 @@ class _TambahBarangKeluarPageState extends State<TambahBarangKeluarPage> {
                 padding: const EdgeInsets.symmetric(
                   horizontal: 18,
                   vertical: 32,
-                ), // vertical lebih besar
+                ),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -601,6 +653,19 @@ class _TambahBarangKeluarPageState extends State<TambahBarangKeluarPage> {
                         ),
                         maxLines: 2,
                       ),
+                      const SizedBox(height: 28),
+
+                      // Tambahkan bagian riwayat di bawah form
+                      const Text(
+                        'Riwayat Barang Keluar',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildHistorySection(),
+
                       const SizedBox(height: 28),
 
                       // Tombol Simpan

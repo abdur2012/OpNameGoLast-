@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/audit_service.dart';
 import '../widgets/custom_navbar.dart';
+import 'data_barang_page.dart';
 
 class TambahBarangPage extends StatefulWidget {
   const TambahBarangPage({super.key});
@@ -24,7 +25,10 @@ class _TambahBarangPageState extends State<TambahBarangPage> {
   String? _selectedJenis;
   bool _saving = false;
 
-  final List<String> _jenisList = [
+  List<String> _jenisList = [];
+
+  // default fallback list if Firestore has no models yet
+  final List<String> _defaultJenis = [
     'Printer',
     'PC',
     'Switch',
@@ -35,6 +39,84 @@ class _TambahBarangPageState extends State<TambahBarangPage> {
     'NVR/DVR',
     'Video Conference',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadJenisFromFirestore();
+  }
+
+  Future<void> _loadJenisFromFirestore() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('item_models').orderBy('name').get();
+      if (snap.docs.isNotEmpty) {
+        _jenisList = snap.docs.map((d) => (d.data()['name'] ?? '').toString()).where((s) => s.isNotEmpty).toList();
+      } else {
+        // use defaults when collection is empty
+        _jenisList = List.from(_defaultJenis);
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      // on error, fallback to defaults
+      _jenisList = List.from(_defaultJenis);
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<bool> _addJenisToFirestore(String name) async {
+    final n = name.trim();
+    if (n.isEmpty) return false;
+    // prevent duplicates case-insensitive
+    if (_jenisList.any((x) => x.toLowerCase() == n.toLowerCase())) return false;
+    try {
+      await FirebaseFirestore.instance.collection('item_models').add({'name': n, 'createdAt': FieldValue.serverTimestamp()});
+      _jenisList.add(n);
+      if (mounted) setState(() {});
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _showAddJenisDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Tambah Model Barang'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(hintText: 'Contoh: Kamera Dome'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Batal')),
+            ElevatedButton(
+              onPressed: () async {
+                final v = controller.text.trim();
+                if (v.isEmpty) return;
+                Navigator.of(ctx).pop(true);
+              },
+              child: const Text('Tambah'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true) {
+      final added = await _addJenisToFirestore(controller.text.trim());
+      if (!added) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal menambahkan model atau sudah ada')));
+      } else {
+        setState(() {
+          _selectedJenis = controller.text.trim();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Model berhasil ditambahkan')));
+      }
+    }
+  }
 
   // Map untuk icon setiap jenis perangkat
   final Map<String, IconData> _jenisIcons = {
@@ -188,25 +270,29 @@ class _TambahBarangPageState extends State<TambahBarangPage> {
           },
         );
       } catch (_) {}
-      // show success dialog
+      // show success dialog and navigate to Data Barang page
       if (mounted) {
         await _showSuccessDialog();
-      }
 
-      // reset form
-      _formKey.currentState?.reset();
-      _namaController.clear();
-      _tanggalController.clear();
-      _tanggalKeluarController.clear();
-      _tanggalRusakController.clear();
-      _noInventarisController.clear();
-      _snController.clear();
-      _keteranganController.clear();
-      setState(() {
-        _status = null;
-        _selectedJenis = null;
-        _saving = false;
-      });
+        // reset form (optional, but keep UI consistent if user navigates back)
+        _formKey.currentState?.reset();
+        _namaController.clear();
+        _tanggalController.clear();
+        _tanggalKeluarController.clear();
+        _tanggalRusakController.clear();
+        _noInventarisController.clear();
+        _snController.clear();
+        _keteranganController.clear();
+        setState(() {
+          _status = null;
+          _selectedJenis = null;
+          _saving = false;
+        });
+
+        // Replace current page with DataBarangPage
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DataBarangPage()));
+        return;
+      }
     } catch (e) {
       setState(() => _saving = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
@@ -265,20 +351,33 @@ class _TambahBarangPageState extends State<TambahBarangPage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Model (stacked)
+                      // Model (stacked) with add button
                       _largeField(
-                        child: DropdownButtonFormField<String>(
-                          isExpanded: true,
-                          value: _selectedJenis,
-                          decoration: _inputDecoration(label: 'Model Barang', prefix: const Icon(Icons.devices)),
-                          itemHeight: 56,
-                          style: const TextStyle(fontSize: 16, color: Colors.black87),
-                          items: _jenisList
-                              .map((jenis) => DropdownMenuItem(value: jenis, child: Text(jenis, overflow: TextOverflow.ellipsis)))
-                              .toList(),
-                          onChanged: (v) => setState(() => _selectedJenis = v),
-                          validator: (v) => v == null ? 'Pilih model barang' : null,
-                        ),
+                        child: Row(children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              value: _selectedJenis,
+                              decoration: _inputDecoration(label: 'Model Barang', prefix: const Icon(Icons.devices)),
+                              itemHeight: 56,
+                              style: const TextStyle(fontSize: 16, color: Colors.black87),
+                              items: _jenisList
+                                  .map((jenis) => DropdownMenuItem(value: jenis, child: Text(jenis, overflow: TextOverflow.ellipsis)))
+                                  .toList(),
+                              onChanged: (v) => setState(() => _selectedJenis = v),
+                              validator: (v) => v == null ? 'Pilih model barang' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Material(
+                            color: Colors.transparent,
+                            child: IconButton(
+                              tooltip: 'Tambah model',
+                              icon: const Icon(Icons.add_circle_outline, color: Colors.teal),
+                              onPressed: _showAddJenisDialog,
+                            ),
+                          ),
+                        ]),
                       ),
                       const SizedBox(height: 12),
 

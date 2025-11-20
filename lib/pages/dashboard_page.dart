@@ -10,6 +10,7 @@ import 'loading_page.dart';
 import 'data_barang_page.dart';
 import 'admin_page.dart';
 import 'summary_by_category_page.dart'; // <-- tambahkan import ini
+import 'global_history_page.dart';
 import '../widgets/custom_navbar.dart';
 
 
@@ -284,6 +285,14 @@ class _DashboardPageState extends State<DashboardPage> with TickerProviderStateM
                             Navigator.pushNamed(context, '/rekap-barang');
                           },
                         ),
+                        _MenuButton(
+                          icon: Icons.history,
+                          label: 'Riwayat',
+                          color: Colors.teal.shade700,
+                          onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const GlobalHistoryPage()));
+                          },
+                        ),
                       ],
                     ),
 
@@ -433,7 +442,7 @@ class _DashboardPageState extends State<DashboardPage> with TickerProviderStateM
                               IconButton(
                                 icon: const Icon(Icons.edit, color: Colors.blue),
                                 onPressed: () {
-                                  Navigator.pushNamed(context, '/edit-barang', arguments: {'id': doc.id, ...data});
+                                  Navigator.pushNamed(context, '/edit-barang', arguments: {'id': doc.id, ...data, 'statusEditable': false});
                                 },
                               ),
                               IconButton(

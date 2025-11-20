@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/audit_service.dart';
 import '../widgets/custom_navbar.dart';
+import 'data_barang_page.dart';
 
 class TambahBarangRusakPage extends StatefulWidget {
   const TambahBarangRusakPage({super.key});
@@ -114,7 +115,8 @@ class _TambahBarangRusakPageState extends State<TambahBarangRusakPage> {
       if (mounted) Navigator.of(context).pop(); // close loading
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Barang rusak berhasil disimpan')));
-        Navigator.of(context).pop(); // close page
+        // Navigate to Data Barang page, replacing current route
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DataBarangPage()));
       }
     } catch (e) {
       if (mounted) Navigator.of(context).pop();
@@ -209,6 +211,56 @@ class _TambahBarangRusakPageState extends State<TambahBarangRusakPage> {
     }
   }
 
+  // Tambahkan fungsi untuk mengambil riwayat barang rusak dari Firestore
+  Future<List<Map<String, dynamic>>> _fetchHistory() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('history')
+          .where('itemId', isEqualTo: _selectedDocId)
+          .orderBy('timestamp', descending: true)
+          .get();
+
+      return snapshot.docs.map((doc) => doc.data()).toList();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat riwayat: $e')),
+        );
+      }
+      return [];
+    }
+  }
+
+  // Tambahkan widget untuk menampilkan riwayat
+  Widget _buildHistorySection() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _fetchHistory(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('Tidak ada riwayat.'));
+        }
+
+        final history = snapshot.data!;
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: history.length,
+          itemBuilder: (context, index) {
+            final entry = history[index];
+            return ListTile(
+              title: Text(entry['action'] ?? 'Perubahan'),
+              subtitle: Text(entry['details']?.toString() ?? ''),
+              trailing: Text(entry['timestamp']?.toDate()?.toString() ?? ''),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mainColor = Colors.teal.shade700;
@@ -230,140 +282,161 @@ class _TambahBarangRusakPageState extends State<TambahBarangRusakPage> {
             padding: const EdgeInsets.all(18),
             child: Card(
               elevation: 8,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 32,
+                ),
                 child: Form(
                   key: _formKey,
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    // Search + selector (UX similar to barang keluar)
-                    TextFormField(
-                      decoration: InputDecoration(
-                        labelText: 'Cari SN atau No Inventaris',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                        filled: true,
-                        fillColor: Colors.white,
-                        prefixIcon: const Icon(Icons.search),
-                      ),
-                      onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
-                    ),
-                    const SizedBox(height: 16),
-
-                    GestureDetector(
-                      onTap: _openSelectBarang,
-                      child: InputDecorator(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Search + selector (UX similar to barang keluar)
+                      TextFormField(
                         decoration: InputDecoration(
-                          labelText: 'Pilih Barang',
+                          labelText: 'Cari SN atau No Inventaris',
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                          prefixIcon: const Icon(Icons.search),
                         ),
-                        child: _selectedDocId == null
-                            ? Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: const [
-                                Text('Pilih barang', style: TextStyle(color: Colors.black54)),
-                                Icon(Icons.keyboard_arrow_down, color: Colors.grey)
-                              ])
-                            : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text(_selectedNamaBarang ?? '-', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 6),
-                                Text('SN: ${_snController.text} • Inv: ${_noInventarisController.text}', style: const TextStyle(color: Colors.black54, fontSize: 13)),
-                              ]),
+                        onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
                       ),
-                    ),
+                      const SizedBox(height: 16),
 
-                    const SizedBox(height: 16),
-
-                    // Model
-                    TextFormField(
-                      controller: _jenisController,
-                      enabled: false,
-                      decoration: InputDecoration(
-                        labelText: 'Model Barang',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // No Inventaris
-                    TextFormField(
-                      controller: _noInventarisController,
-                      enabled: false,
-                      decoration: InputDecoration(
-                        labelText: 'No. Inventaris',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // SN
-                    TextFormField(
-                      controller: _snController,
-                      enabled: false,
-                      decoration: InputDecoration(
-                        labelText: 'Serial Number (SN)',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Tanggal Rusak
-                    TextFormField(
-                      controller: _tanggalController,
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: 'Tanggal Rusak',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                      onTap: _pickDate,
-                      validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Keterangan
-                    TextFormField(
-                      controller: _keteranganController,
-                      decoration: InputDecoration(
-                        labelText: 'Keterangan (Opsional)',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 22),
-
-                    // Tombol Simpan
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.save),
-                        label: _saving
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Text('Simpan Barang Rusak', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: mainColor,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 4,
+                      GestureDetector(
+                        onTap: _openSelectBarang,
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Pilih Barang',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                          ),
+                          child: _selectedDocId == null
+                              ? Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: const [
+                                  Text('Pilih barang', style: TextStyle(color: Colors.black54)),
+                                  Icon(Icons.keyboard_arrow_down, color: Colors.grey)
+                                ])
+                              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text(_selectedNamaBarang ?? '-', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 6),
+                                  Text('SN: ${_snController.text} • Inv: ${_noInventarisController.text}', style: const TextStyle(color: Colors.black54, fontSize: 13)),
+                                ]),
                         ),
-                        onPressed: _saving ? null : () async {
-                          setState(() => _saving = true);
-                          await _simpanBarangRusak();
-                          if (mounted) setState(() => _saving = false);
-                        },
                       ),
-                    ),
-                  ]),
+
+                      const SizedBox(height: 16),
+
+                      // Model
+                      TextFormField(
+                        controller: _jenisController,
+                        enabled: false,
+                        decoration: InputDecoration(
+                          labelText: 'Model Barang',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // No Inventaris
+                      TextFormField(
+                        controller: _noInventarisController,
+                        enabled: false,
+                        decoration: InputDecoration(
+                          labelText: 'No. Inventaris',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // SN
+                      TextFormField(
+                        controller: _snController,
+                        enabled: false,
+                        decoration: InputDecoration(
+                          labelText: 'Serial Number (SN)',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Tanggal Rusak
+                      TextFormField(
+                        controller: _tanggalController,
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: 'Tanggal Rusak',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                        onTap: _pickDate,
+                        validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Keterangan
+                      TextFormField(
+                        controller: _keteranganController,
+                        decoration: InputDecoration(
+                          labelText: 'Keterangan (Opsional)',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 28),
+
+                      // Tambahkan bagian riwayat di bawah form
+                      const Text(
+                        'Riwayat Barang Rusak',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildHistorySection(),
+
+                      const SizedBox(height: 28),
+
+                      // Tombol Simpan
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.save),
+                          label: _saving
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('Simpan Barang Rusak', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: mainColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 4,
+                          ),
+                          onPressed: _saving ? null : () async {
+                            setState(() => _saving = true);
+                            await _simpanBarangRusak();
+                            if (mounted) setState(() => _saving = false);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

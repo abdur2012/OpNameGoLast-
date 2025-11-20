@@ -397,7 +397,7 @@ class _DataBarangPageState extends State<DataBarangPage> {
                         DataCell(PopupMenuButton<String>(
                           onSelected: (value) async {
                             if (value == 'edit') {
-                              Navigator.pushNamed(context, '/edit-barang', arguments: {'id': doc.id, ...data});
+                              Navigator.pushNamed(context, '/edit-barang', arguments: {'id': doc.id, ...data, 'statusEditable': false});
                             } else if (value == 'riwayat') {
                               Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryPage(itemId: doc.id, itemName: data['nama']?.toString())));
                             } else if (value == 'hapus') {
@@ -483,7 +483,7 @@ class _DataBarangPageState extends State<DataBarangPage> {
                                 icon: const Icon(Icons.more_vert),
                                 onSelected: (value) async {
                                   if (value == 'edit') {
-                                    Navigator.pushNamed(context, '/edit-barang', arguments: {'id': doc.id, ...data});
+                                    Navigator.pushNamed(context, '/edit-barang', arguments: {'id': doc.id, ...data, 'statusEditable': false});
                                   } else if (value == 'riwayat') {
                                     Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryPage(itemId: doc.id, itemName: data['nama']?.toString())));
                                   } else if (value == 'hapus') {

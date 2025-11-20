@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 import 'dart:math';
+import '../services/audit_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -47,6 +48,11 @@ class _LoginPageState extends State<LoginPage> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
         await prefs.setString('username', username);
+
+        // Log login event (best-effort)
+        try {
+          await AuditService.logAuthEvent(action: 'login', details: {'method': 'username'});
+        } catch (_) {}
 
         if (mounted) setState(() => _isLoading = false);
         // show success dialog then navigate when user taps Tutup

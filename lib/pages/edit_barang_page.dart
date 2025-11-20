@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/audit_service.dart';
 import '../widgets/custom_navbar.dart';
+import 'data_barang_page.dart';
 
 class EditBarangPage extends StatefulWidget {
   const EditBarangPage({super.key});
@@ -24,9 +25,10 @@ class _EditBarangPageState extends State<EditBarangPage> {
   String? _selectedJenis;
   String? _status;
   bool _initDone = false;
+  bool _statusEditable = true;
   late String docId;
 
-  final List<String> _jenisList = [
+  List<String> _jenisList = [
     'Printer',
     'PC',
     'Switch',
@@ -37,6 +39,59 @@ class _EditBarangPageState extends State<EditBarangPage> {
     'NVR/DVR',
     'Video Conference',
   ];
+
+  // fallback defaults (kept for offline/fallback)
+  final List<String> _defaultJenis = [
+    'Printer',
+    'PC',
+    'Switch',
+    'CCTV',
+    'Monitor',
+    'Router',
+    'Access Point',
+    'NVR/DVR',
+    'Video Conference',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadJenisFromFirestore();
+  }
+
+  Future<void> _loadJenisFromFirestore() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('item_models').orderBy('name').get();
+      if (snap.docs.isNotEmpty) {
+        final remote = snap.docs.map((d) => (d.data()['name'] ?? '').toString()).where((s) => s.isNotEmpty).toList();
+        // merge remote list with existing, keeping unique values and preserving order
+        final merged = <String>[];
+        for (final s in remote) {
+          if (!merged.contains(s)) merged.add(s);
+        }
+        for (final s in _jenisList) {
+          if (!merged.contains(s)) merged.add(s);
+        }
+        _jenisList = merged;
+      } else {
+        _jenisList = List.from(_defaultJenis);
+      }
+
+      // ensure selected value is present
+      if (_selectedJenis != null && !_jenisList.contains(_selectedJenis)) {
+        _jenisList.insert(0, _selectedJenis!);
+      }
+
+      if (mounted) setState(() {});
+    } catch (e) {
+      // fallback to defaults on error
+      _jenisList = List.from(_defaultJenis);
+      if (_selectedJenis != null && !_jenisList.contains(_selectedJenis)) {
+        _jenisList.insert(0, _selectedJenis!);
+      }
+      if (mounted) setState(() {});
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -60,17 +115,27 @@ class _EditBarangPageState extends State<EditBarangPage> {
 
     // guard initialization so subsequent didChangeDependencies calls (caused by rebuilds)
     // don't overwrite runtime user changes (like _status) before save.
-    if (!_initDone) {
+      if (!_initDone) {
       // ignore: avoid_print
       print('EditBarangPage: didChangeDependencies init');
       docId = args['id'];
       _namaController.text = args['nama'] ?? '';
-      _selectedJenis = args['jenis'] ?? '';
+      // normalize jenis to a non-empty string or null
+      final rawJenis = args['jenis'];
+      _selectedJenis = (rawJenis == null || rawJenis.toString().trim().isEmpty) ? null : rawJenis.toString();
+      // ensure dropdown items contain the current jenis value to avoid Dropdown assertions
+      if (_selectedJenis != null && !_jenisList.contains(_selectedJenis)) {
+        _jenisList.insert(0, _selectedJenis!);
+      }
       _noInventarisController.text = args['no_inventaris'] ?? '';
       _snController.text = args['sn'] ?? '';
       _keteranganController.text = args['keterangan'] ?? '';
       // normalize status to lowercase to match dropdown item values
       _status = (args['status'] ?? '').toString().toLowerCase();
+      // statusEditable flag: default true (admin). If passed false, status cannot be changed by user
+      if (args.containsKey('statusEditable')) {
+        _statusEditable = args['statusEditable'] == true;
+      }
       _initDone = true;
     }
 
@@ -168,9 +233,13 @@ class _EditBarangPageState extends State<EditBarangPage> {
         'no_inventaris': _noInventarisController.text.trim(),
         'sn': _snController.text.trim(),
         'keterangan': _keteranganController.text.trim(),
-        'status': _status ?? '',
         'updatedAt': FieldValue.serverTimestamp(),
       };
+
+      // Only include status in update payload when editing of status is allowed
+      if (_statusEditable) {
+        updateData['status'] = _status ?? '';
+      }
 
       if (_tanggalController.text.trim().isNotEmpty) {
         try {
@@ -246,8 +315,10 @@ class _EditBarangPageState extends State<EditBarangPage> {
         // build audit details from controllers and parsed values (avoid FieldValue.delete sentinel)
         final details = <String, dynamic>{
           'nama': _namaController.text.trim(),
-          'status': _status ?? '',
         };
+        if (_statusEditable) {
+          details['status'] = _status ?? '';
+        }
         if (_status == 'keluar') {
           details['tanggal_keluar'] = _tanggalKeluarController.text.trim();
         } else if (_status == 'rusak') {
@@ -257,10 +328,10 @@ class _EditBarangPageState extends State<EditBarangPage> {
         await AuditService.logItemHistory(itemId: docId, action: 'update', details: details);
       } catch (_) {}
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Data berhasil diupdate')));
-      Navigator.pop(context);
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DataBarangPage()));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal update data: $e')));
@@ -408,25 +479,27 @@ class _EditBarangPageState extends State<EditBarangPage> {
                                     items: ['masuk', 'keluar', 'rusak']
                                         .map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase(), overflow: TextOverflow.ellipsis)))
                                         .toList(),
-                                    onChanged: (v) {
-                                      setState(() {
-                                        final prev = _status;
-                                        _status = v?.toString();
-                                        // debug when status changes
-                                        // ignore: avoid_print
-                                        print('EditBarangPage: status changed $prev -> $_status');
-                                        // Clear opposite status-specific dates when switching
-                                        if (_status == 'rusak') {
-                                          _tanggalKeluarController.clear();
-                                        } else if (_status == 'keluar') {
-                                          _tanggalRusakController.clear();
-                                        } else {
-                                          // switched to 'masuk' — clear both dates
-                                          _tanggalKeluarController.clear();
-                                          _tanggalRusakController.clear();
-                                        }
-                                      });
-                                    },
+                                    onChanged: _statusEditable
+                                        ? (v) {
+                                            setState(() {
+                                              final prev = _status;
+                                              _status = v?.toString();
+                                              // debug when status changes
+                                              // ignore: avoid_print
+                                              print('EditBarangPage: status changed $prev -> $_status');
+                                              // Clear opposite status-specific dates when switching
+                                              if (_status == 'rusak') {
+                                                _tanggalKeluarController.clear();
+                                              } else if (_status == 'keluar') {
+                                                _tanggalRusakController.clear();
+                                              } else {
+                                                // switched to 'masuk' — clear both dates
+                                                _tanggalKeluarController.clear();
+                                                _tanggalRusakController.clear();
+                                              }
+                                            });
+                                          }
+                                        : null,
                                     decoration: _inputDecoration('Status'),
                                     validator: (v) => v == null ? 'Pilih status' : null,
                                   ),
@@ -435,6 +508,16 @@ class _EditBarangPageState extends State<EditBarangPage> {
                             ),
 
                             const SizedBox(height: 16),
+
+                            // Informasi jika status tidak dapat diedit oleh user
+                            if (!_statusEditable)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: Text(
+                                  'Status tidak dapat diubah.',
+                                  style: TextStyle(color: Colors.red.shade700, fontSize: 13, fontWeight: FontWeight.w500),
+                                ),
+                              ),
 
                             // Conditional inputs when status == 'keluar' or 'rusak'
                             AnimatedSwitcher(
