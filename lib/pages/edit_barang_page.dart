@@ -26,6 +26,8 @@ class _EditBarangPageState extends State<EditBarangPage> {
   String? _status;
   bool _initDone = false;
   bool _statusEditable = true;
+  // kontrol apakah field Tanggal Keluar boleh diedit. Default: false (tidak bisa diedit)
+  bool _tanggalKeluarEditable = false;
   late String docId;
 
   List<String> _jenisList = [
@@ -253,19 +255,22 @@ class _EditBarangPageState extends State<EditBarangPage> {
       }
 
       if (_status == 'keluar') {
-        if (_tanggalKeluarController.text.trim().isNotEmpty) {
-          try {
-            final dt = DateTime.parse(_tanggalKeluarController.text.trim());
-            updateData['tanggal_keluar'] = Timestamp.fromDate(dt);
-          } catch (e) {
+        // Only require/parse Tanggal Keluar when the field is editable.
+        if (_tanggalKeluarEditable) {
+          if (_tanggalKeluarController.text.trim().isNotEmpty) {
+            try {
+              final dt = DateTime.parse(_tanggalKeluarController.text.trim());
+              updateData['tanggal_keluar'] = Timestamp.fromDate(dt);
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Format Tanggal Keluar tidak valid')));
+              return;
+            }
+          } else {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Format Tanggal Keluar tidak valid')));
+                content: Text('Tanggal keluar wajib diisi untuk status KELUAR')));
             return;
           }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Tanggal keluar wajib diisi untuk status KELUAR')));
-          return;
         }
         // no jumlah/keterangan stored (single item)
         updateData['tanggal_rusak'] = FieldValue.delete();
@@ -437,17 +442,24 @@ class _EditBarangPageState extends State<EditBarangPage> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: TextFormField(
-                                    controller: _tanggalKeluarController,
-                                    readOnly: true,
-                                    decoration: _inputDecoration('Tanggal Keluar'),
-                                    onTap: () => _pickDate(_tanggalKeluarController),
-                                    validator: (v) {
-                                      if (_status == 'keluar') {
-                                        if (v == null || v.trim().isEmpty) return 'Wajib diisi untuk status KELUAR';
-                                      }
-                                      return null;
-                                    },
-                                  ),
+                                        controller: _tanggalKeluarController,
+                                        // make non-editable according to the new flag
+                                        enabled: _tanggalKeluarEditable,
+                                        readOnly: true,
+                                        decoration: _inputDecoration('Tanggal Keluar'),
+                                        onTap: () {
+                                          if (_tanggalKeluarEditable) {
+                                            _pickDate(_tanggalKeluarController);
+                                          }
+                                        },
+                                        validator: (v) {
+                                          // only validate when the field is editable by the user
+                                          if (_status == 'keluar' && _tanggalKeluarEditable) {
+                                            if (v == null || v.trim().isEmpty) return 'Wajib diisi untuk status KELUAR';
+                                          }
+                                          return null;
+                                        },
+                                      ),
                                 ),
                               ],
                             ),

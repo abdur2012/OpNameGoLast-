@@ -14,6 +14,7 @@ class AuditService {
     required String itemId,
     required String action,
     Map<String, dynamic>? details,
+    String? eventType,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -25,6 +26,8 @@ class AuditService {
         'user': user,
         'details': details ?? {},
         'timestamp': FieldValue.serverTimestamp(),
+        // optional eventType (e.g. 'item')
+        if (eventType != null) 'eventType': eventType,
       };
 
       await FirebaseFirestore.instance.collection('history').add(payload);

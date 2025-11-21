@@ -89,7 +89,6 @@ class _TambahBarangKeluarPageState extends State<TambahBarangKeluarPage> {
     try {
       final tanggalKeluar = DateTime.parse(_tanggalController.text.trim());
 
-      // Update data barang yang dipilih
       await FirebaseFirestore.instance
           .collection('items')
           .doc(_selectedDocId)
@@ -100,7 +99,7 @@ class _TambahBarangKeluarPageState extends State<TambahBarangKeluarPage> {
             'updatedAt': FieldValue.serverTimestamp(),
           });
 
-      // Log history (best-effort)
+      // Log history using AuditService so the saved username is recorded
       try {
         await AuditService.logItemHistory(
           itemId: _selectedDocId!,
@@ -110,6 +109,7 @@ class _TambahBarangKeluarPageState extends State<TambahBarangKeluarPage> {
             'tanggal_keluar': tanggalKeluar.toIso8601String(),
             'keterangan': _keteranganController.text.trim(),
           },
+          eventType: 'item',
         );
       } catch (_) {}
 
@@ -131,55 +131,7 @@ class _TambahBarangKeluarPageState extends State<TambahBarangKeluarPage> {
     }
   }
 
-  // Tambahkan fungsi untuk mengambil riwayat barang keluar dari Firestore
-  Future<List<Map<String, dynamic>>> _fetchHistory() async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('history')
-          .where('itemId', isEqualTo: _selectedDocId)
-          .orderBy('timestamp', descending: true)
-          .get();
-
-      return snapshot.docs.map((doc) => doc.data()).toList();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat riwayat: $e')),
-        );
-      }
-      return [];
-    }
-  }
-
-  // Tambahkan widget untuk menampilkan riwayat
-  Widget _buildHistorySection() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _fetchHistory(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text('Tidak ada riwayat.'));
-        }
-
-        final history = snapshot.data!;
-        return ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: history.length,
-          itemBuilder: (context, index) {
-            final entry = history[index];
-            return ListTile(
-              title: Text(entry['action'] ?? 'Perubahan'),
-              subtitle: Text(entry['details']?.toString() ?? ''),
-              trailing: Text(entry['timestamp']?.toDate()?.toString() ?? ''),
-            );
-          },
-        );
-      },
-    );
-  }
+  // history fetching and UI removed to keep the form compact
 
   @override
   Widget build(BuildContext context) {
@@ -654,17 +606,6 @@ class _TambahBarangKeluarPageState extends State<TambahBarangKeluarPage> {
                         maxLines: 2,
                       ),
                       const SizedBox(height: 28),
-
-                      // Tambahkan bagian riwayat di bawah form
-                      const Text(
-                        'Riwayat Barang Keluar',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildHistorySection(),
 
                       const SizedBox(height: 28),
 

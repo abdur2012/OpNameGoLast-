@@ -66,6 +66,13 @@ class _DataBarangPageState extends State<DataBarangPage> {
   void dispose() {
     _debounce?.cancel();
     _searchController.dispose();
+    // restore all orientations when leaving the page
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     super.dispose();
   }
 
@@ -80,26 +87,6 @@ class _DataBarangPageState extends State<DataBarangPage> {
         backgroundColor: mainColor,
         elevation: 0,
         actions: [
-          IconButton(
-            tooltip: 'Landscape',
-            icon: const Icon(Icons.screen_rotation_alt),
-            onPressed: () {
-              SystemChrome.setPreferredOrientations([
-                DeviceOrientation.landscapeLeft,
-                DeviceOrientation.landscapeRight,
-              ]);
-            },
-          ),
-          IconButton(
-            tooltip: 'Portrait',
-            icon: const Icon(Icons.stay_current_portrait),
-            onPressed: () {
-              SystemChrome.setPreferredOrientations([
-                DeviceOrientation.portraitUp,
-                DeviceOrientation.portraitDown,
-              ]);
-            },
-          ),
         ],
       ),
       bottomNavigationBar: const CustomNavBar(),
@@ -332,7 +319,34 @@ class _DataBarangPageState extends State<DataBarangPage> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(children: [const SizedBox(width: 4), const Text('Tampilkan sebagai tabel'), const SizedBox(width: 8), Switch(value: _showTable, activeColor: Colors.teal, onChanged: (v) => setState(() => _showTable = v)), const Spacer(), const SizedBox.shrink()]),
+          child: Row(children: [
+            const SizedBox(width: 4),
+            const Text('Tampilkan sebagai tabel'),
+            const SizedBox(width: 8),
+            Switch(
+              value: _showTable,
+              activeColor: Colors.teal,
+              onChanged: (v) async {
+                // switch to landscape when showing table, portrait otherwise
+                try {
+                  if (v) {
+                    await SystemChrome.setPreferredOrientations([
+                      DeviceOrientation.landscapeLeft,
+                      DeviceOrientation.landscapeRight,
+                    ]);
+                  } else {
+                    await SystemChrome.setPreferredOrientations([
+                      DeviceOrientation.portraitUp,
+                      DeviceOrientation.portraitDown,
+                    ]);
+                  }
+                } catch (_) {}
+                if (mounted) setState(() => _showTable = v);
+              },
+            ),
+            const Spacer(),
+            const SizedBox.shrink()
+          ]),
         ),
         Expanded(
           child: Builder(
@@ -500,7 +514,6 @@ class _DataBarangPageState extends State<DataBarangPage> {
                                 },
                                 itemBuilder: (context) => [
                                   const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit, color: Colors.blue), title: Text('Edit'))),
-                                  const PopupMenuItem(value: 'riwayat', child: ListTile(leading: Icon(Icons.history, color: Colors.black87), title: Text('Riwayat'))),
                                   const PopupMenuItem(value: 'hapus', child: ListTile(leading: Icon(Icons.delete, color: Colors.red), title: Text('Hapus'))),
                                 ],
                               ),

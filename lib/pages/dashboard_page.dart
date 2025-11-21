@@ -41,6 +41,35 @@ class _DashboardPageState extends State<DashboardPage> with TickerProviderStateM
     _statFuture = getStatistik();
   }
 
+  // Get display name for header. Try SharedPreferences first, fallback to Firestore lookup by username.
+  Future<String> _getDisplayName() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString('fullName');
+      if (cached != null && cached.trim().isNotEmpty) return cached;
+
+      final username = prefs.getString('username');
+      if (username == null || username.trim().isEmpty) return 'User';
+
+      // Try Firestore lookup
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get();
+      if (snap.docs.isNotEmpty) {
+        final d = snap.docs.first.data() as Map<String, dynamic>;
+        final name = (d['nama'] ?? d['fullName'] ?? d['name'] ?? username).toString();
+        await prefs.setString('fullName', name);
+        return name;
+      }
+
+      return username;
+    } catch (_) {
+      return 'User';
+    }
+  }
+
   bool _mounted = true;
 
   @override
@@ -179,13 +208,21 @@ class _DashboardPageState extends State<DashboardPage> with TickerProviderStateM
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Hi, IT DAOP 3',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                    FutureBuilder<String>(
+                      future: _getDisplayName(),
+                      builder: (context, snapName) {
+                        final name = (snapName.connectionState == ConnectionState.done && snapName.hasData)
+                            ? snapName.data!
+                            : 'User';
+                        return Text(
+                          'Hi, $name',
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 10),
                     Center(
