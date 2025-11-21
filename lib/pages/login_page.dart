@@ -348,7 +348,7 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 8),
                       Center(
                         child: Text(
-                          'Silakan masuk untuk mengelola stok',
+                          'Login',
                           style: TextStyle(
                             color: Colors.teal.shade400,
                             fontSize: 15,
